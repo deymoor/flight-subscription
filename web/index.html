@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flight Subscriptions</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --panel: #161a22;
+    --panel-2: #1d222c;
+    --line: #262c38;
+    --text: #e6e9ef;
+    --muted: #7b8494;
+    --accent: #5b8cff;
+    --accent-soft: rgba(91, 140, 255, .14);
+    --ok: #3ecf8e;
+    --err: #ff6b6b;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 800px at 70% -10%, #1a2030 0%, var(--bg) 55%);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+  }
+  .app {
+    width: 100%;
+    max-width: 440px;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    margin-bottom: 18px;
+  }
+  .tab {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 10px 12px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: .18s ease;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent-soft); color: var(--text); }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  form { display: none; flex-direction: column; gap: 12px; }
+  form.active { display: flex; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .field { position: relative; }
+  label {
+    position: absolute;
+    top: 8px;
+    left: 14px;
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  input {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 24px 14px 8px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  input::placeholder { color: #4a5261; }
+  button.submit {
+    margin-top: 4px;
+    border: 0;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 13px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: .15s ease;
+  }
+  button.submit:hover { filter: brightness(1.08); }
+  button.submit:active { transform: translateY(1px); }
+  button.submit:disabled { opacity: .6; cursor: default; }
+  .result {
+    margin-top: 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #0b0d12;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height .3s ease, opacity .3s ease;
+  }
+  .result.show { max-height: 360px; opacity: 1; }
+  .result .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--line);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .dot.err { background: var(--err); box-shadow: 0 0 10px var(--err); }
+  pre {
+    margin: 0;
+    padding: 14px;
+    font: 13px/1.55 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    color: #c9d2e3;
+    overflow: auto;
+    max-height: 300px;
+  }
+  .list { padding: 8px; overflow: auto; max-height: 300px; }
+  .item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+  }
+  .item + .item { border-top: 1px solid var(--line); }
+  .item .dir { font-weight: 600; }
+  .item .price { color: var(--ok); font-variant-numeric: tabular-nums; }
+  .item .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .empty { padding: 18px 14px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="tabs">
+      <button class="tab active" data-tab="sub">Subscribe</button>
+      <button class="tab" data-tab="evt">Price event</button>
+      <button class="tab" data-tab="ntf">Notifications</button>
+    </div>
+
+    <div class="card">
+      <form id="sub" class="active">
+        <div class="field">
+          <label>User</label>
+          <input name="user_id" placeholder="user-42" autocomplete="off" required>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>From</label>
+            <input name="from" placeholder="LED" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input name="to" placeholder="AER" autocomplete="off" required>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Max price</label>
+            <input name="amount" type="number" step="0.01" min="0" placeholder="120.00" required>
+          </div>
+          <div class="field">
+            <label>Currency</label>
+            <input name="currency" placeholder="USD" maxlength="3" autocomplete="off" required>
+          </div>
+        </div>
+        <button class="submit" type="submit">Create subscription</button>
+      </form>
+
+      <form id="evt">
+        <div class="row">
+          <div class="field">
+            <label>From</label>
+            <input name="from" placeholder="LED" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input name="to" placeholder="AER" autocomplete="off" required>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Price</label>
+            <input name="amount" type="number" step="0.01" min="0" placeholder="95.00" required>
+          </div>
+          <div class="field">
+            <label>Currency</label>
+            <input name="currency" placeholder="USD" maxlength="3" autocomplete="off" required>
+          </div>
+        </div>
+        <button class="submit" type="submit">Publish event</button>
+      </form>
+
+      <form id="ntf">
+        <div class="row">
+          <div class="field">
+            <label>From</label>
+            <input name="from" placeholder="LED" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input name="to" placeholder="AER" autocomplete="off" required>
+          </div>
+        </div>
+        <button class="submit" type="submit">Check notifications</button>
+      </form>
+
+      <div class="result" id="result">
+        <div class="head"><span class="dot" id="dot"></span><span id="status"></span></div>
+        <pre id="body"></pre>
+        <div class="list" id="list"></div>
+      </div>
+    </div>
+  </main>
+
+<script>
+  const API_BASE = "/api";
+  const tabs = document.querySelectorAll(".tab");
+  const forms = {
+    sub: document.getElementById("sub"),
+    evt: document.getElementById("evt"),
+    ntf: document.getElementById("ntf"),
+  };
+  const result = document.getElementById("result");
+  const dot = document.getElementById("dot");
+  const statusEl = document.getElementById("status");
+  const bodyEl = document.getElementById("body");
+  const listEl = document.getElementById("list");
+
+  tabs.forEach(t => t.addEventListener("click", () => {
+    tabs.forEach(x => x.classList.toggle("active", x === t));
+    Object.entries(forms).forEach(([k, f]) => f.classList.toggle("active", k === t.dataset.tab));
+    result.classList.remove("show");
+  }));
+
+  const minorUnits = a => Math.round(parseFloat(a) * 100);
+  const money = f => ({ currency: f.currency.value.trim().toUpperCase(), minor_units: minorUnits(f.amount.value) });
+
+  const fmtMoney = m => (m.minor_units / 100).toFixed(2) + " " + m.currency;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function show(ok, status, data) {
+    dot.className = "dot " + (ok ? "ok" : "err");
+    statusEl.textContent = status;
+    listEl.style.display = "none";
+    bodyEl.style.display = "block";
+    bodyEl.textContent = JSON.stringify(data, null, 2);
+    result.classList.add("show");
+  }
+
+  function showList(ok, status, items) {
+    dot.className = "dot " + (ok ? "ok" : "err");
+    statusEl.textContent = status;
+    bodyEl.style.display = "none";
+    listEl.style.display = "block";
+    if (!Array.isArray(items) || items.length === 0) {
+      listEl.innerHTML = '<div class="empty">No notifications</div>';
+    } else {
+      listEl.innerHTML = items.map(n => `
+        <div class="item">
+          <div>
+            <div class="dir">${esc(n.direction_from)} → ${esc(n.direction_to)}</div>
+            <div class="meta">${esc(n.user_id)} · ${new Date(n.created_at).toLocaleString()}</div>
+          </div>
+          <div class="price">${esc(fmtMoney(n.actual_price))}</div>
+        </div>`).join("");
+    }
+    result.classList.add("show");
+  }
+
+  async function send(path, payload, btn) {
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "Sending…";
+    try {
+      const res = await fetch(API_BASE + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      let data; try { data = JSON.parse(text); } catch { data = text; }
+      show(res.ok, res.status + " " + res.statusText, data);
+    } catch (e) {
+      show(false, "network error", String(e));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  forms.sub.addEventListener("submit", e => {
+    e.preventDefault();
+    const f = e.target;
+    send("/subscriptions", {
+      user_id: f.user_id.value.trim(),
+      direction_from: f.from.value.trim().toUpperCase(),
+      direction_to: f.to.value.trim().toUpperCase(),
+      max_price: money(f),
+    }, f.querySelector(".submit"));
+  });
+
+  forms.evt.addEventListener("submit", e => {
+    e.preventDefault();
+    const f = e.target;
+    send("/price-events", {
+      event_id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+      direction_from: f.from.value.trim().toUpperCase(),
+      direction_to: f.to.value.trim().toUpperCase(),
+      price: money(f),
+      occurred_at: new Date().toISOString(),
+    }, f.querySelector(".submit"));
+  });
+
+  forms.ntf.addEventListener("submit", async e => {
+    e.preventDefault();
+    const f = e.target;
+    const btn = f.querySelector(".submit");
+    const from = f.from.value.trim().toUpperCase();
+    const to = f.to.value.trim().toUpperCase();
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "Checking…";
+    try {
+      const url = API_BASE + "/notifications?from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to);
+      const res = await fetch(url);
+      const text = await res.text();
+      let data; try { data = JSON.parse(text); } catch { data = text; }
+      if (res.ok) {
+        showList(true, res.status + " · " + (Array.isArray(data) ? data.length : 0), data);
+      } else {
+        show(false, res.status + " " + res.statusText, data);
+      }
+    } catch (err) {
+      show(false, "network error", String(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  });
+</script>
+</body>
+</html>

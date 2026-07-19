@@ -1,0 +1,90 @@
+asyncapi: 2.6.0
+info:
+  title: Flight Subscription Service Events
+  version: 0.1.0
+  description: Kafka contract for price change events consumed by the service.
+servers:
+  localKafka:
+    url: localhost:9092
+    protocol: kafka
+    description: Local Kafka broker from docker-compose.
+channels:
+  price.changed:
+    description: Price change events consumed by the notification worker.
+    subscribe:
+      operationId: consumePriceChanged
+      summary: Consume a price change event
+      message:
+        $ref: "#/components/messages/PriceChangedEvent"
+components:
+  messages:
+    PriceChangedEvent:
+      name: PriceChangedEvent
+      title: Price Changed Event
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/PriceChangedEventPayload"
+      examples:
+        - name: matchingPrice
+          payload:
+            event_id: e2e-1
+            direction_from: MOW
+            direction_to: LED
+            price:
+              currency: RUB
+              minor_units: 430000
+            occurred_at: "2026-07-17T10:00:00Z"
+      x-processing:
+        matchingRule: active subscription with the same direction and currency whose max_price is greater than or equal to price (amounts in different currencies never match)
+        idempotency: notification is unique by subscription_id and event_id
+  schemas:
+    PriceChangedEventPayload:
+      type: object
+      required:
+        - event_id
+        - direction_from
+        - direction_to
+        - price
+        - occurred_at
+      properties:
+        event_id:
+          type: string
+          minLength: 1
+          description: Stable event id used for notification deduplication.
+          examples:
+            - e2e-1
+        direction_from:
+          type: string
+          minLength: 1
+          examples:
+            - MOW
+        direction_to:
+          type: string
+          minLength: 1
+          examples:
+            - LED
+        price:
+          $ref: "#/components/schemas/Money"
+        occurred_at:
+          type: string
+          format: date-time
+          examples:
+            - "2026-07-17T10:00:00Z"
+    Money:
+      type: object
+      description: Monetary amount as an explicit ISO 4217 currency and an integer value in the currency's minor units. Amounts are only comparable within the same currency.
+      required:
+        - currency
+        - minor_units
+      properties:
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          examples:
+            - RUB
+        minor_units:
+          type: integer
+          format: int64
+          minimum: 1
+          examples:
+            - 430000

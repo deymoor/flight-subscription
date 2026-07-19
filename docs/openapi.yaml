@@ -1,0 +1,297 @@
+openapi: 3.1.0
+info:
+  title: Flight Subscription Service API
+  version: 0.1.0
+  description: HTTP API for creating flight price subscriptions.
+servers:
+  - url: http://localhost:8080
+    description: Local API server
+tags:
+  - name: Health
+  - name: Subscriptions
+  - name: Price Events
+paths:
+  /healthz:
+    get:
+      tags:
+        - Health
+      summary: Check API process health
+      operationId: getHealthz
+      responses:
+        "204":
+          description: API process is running.
+  /subscriptions:
+    post:
+      tags:
+        - Subscriptions
+      summary: Create a flight price subscription
+      operationId: createSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionRequest"
+            examples:
+              moscowToSaintPetersburg:
+                value:
+                  user_id: user-1
+                  direction_from: MOW
+                  direction_to: LED
+                  max_price:
+                    currency: RUB
+                    minor_units: 450000
+      responses:
+        "201":
+          description: Subscription was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+              examples:
+                created:
+                  value:
+                    id: 1
+                    user_id: user-1
+                    direction_from: MOW
+                    direction_to: LED
+                    max_price:
+                      currency: RUB
+                      minor_units: 450000
+                    active: true
+                    created_at: "2026-07-17T10:00:00Z"
+        "400":
+          description: Request JSON or subscription data is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidSubscription:
+                  value:
+                    error: invalid subscription
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                internalError:
+                  value:
+                    error: internal error
+  /price-events:
+    post:
+      tags:
+        - Price Events
+      summary: Publish a price change event to Kafka
+      operationId: publishPriceEvent
+      description: Publishes a price change event to Kafka topic `price.changed`; the consumer processes it asynchronously and creates notifications for matching subscriptions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishPriceEventRequest"
+            examples:
+              matchingPrice:
+                value:
+                  event_id: e2e-1
+                  direction_from: MOW
+                  direction_to: LED
+                  price:
+                    currency: RUB
+                    minor_units: 430000
+                  occurred_at: "2026-07-17T10:00:00Z"
+      responses:
+        "202":
+          description: Event was published to Kafka.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceEvent"
+              examples:
+                accepted:
+                  value:
+                    event_id: e2e-1
+                    direction_from: MOW
+                    direction_to: LED
+                    price:
+                      currency: RUB
+                      minor_units: 430000
+                    occurred_at: "2026-07-17T10:00:00Z"
+        "400":
+          description: Request JSON or price event data is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidPriceEvent:
+                  value:
+                    error: invalid price event
+        "502":
+          description: Event could not be published to Kafka.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                kafkaPublishFailed:
+                  value:
+                    error: kafka publish failed
+components:
+  schemas:
+    Money:
+      type: object
+      description: Monetary amount as an explicit ISO 4217 currency and an integer value in the currency's minor units (kopecks, cents, ...). Amounts are only comparable within the same currency.
+      required:
+        - currency
+        - minor_units
+      properties:
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          pattern: "^[A-Z]{3}$"
+          examples:
+            - RUB
+        minor_units:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Amount in the currency's minor units, e.g. 450000 = 4500.00 RUB.
+          examples:
+            - 450000
+    CreateSubscriptionRequest:
+      type: object
+      required:
+        - user_id
+        - direction_from
+        - direction_to
+        - max_price
+      properties:
+        user_id:
+          type: string
+          minLength: 1
+          examples:
+            - user-1
+        direction_from:
+          type: string
+          minLength: 1
+          examples:
+            - MOW
+        direction_to:
+          type: string
+          minLength: 1
+          examples:
+            - LED
+        max_price:
+          $ref: "#/components/schemas/Money"
+    Subscription:
+      type: object
+      required:
+        - id
+        - user_id
+        - direction_from
+        - direction_to
+        - max_price
+        - active
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+          examples:
+            - 1
+        user_id:
+          type: string
+          examples:
+            - user-1
+        direction_from:
+          type: string
+          examples:
+            - MOW
+        direction_to:
+          type: string
+          examples:
+            - LED
+        max_price:
+          $ref: "#/components/schemas/Money"
+        active:
+          type: boolean
+          examples:
+            - true
+        created_at:
+          type: string
+          format: date-time
+          examples:
+            - "2026-07-17T10:00:00Z"
+    PublishPriceEventRequest:
+      type: object
+      required:
+        - event_id
+        - direction_from
+        - direction_to
+        - price
+        - occurred_at
+      properties:
+        event_id:
+          type: string
+          minLength: 1
+          description: Stable event id used for notification deduplication.
+          examples:
+            - e2e-1
+        direction_from:
+          type: string
+          minLength: 1
+          examples:
+            - MOW
+        direction_to:
+          type: string
+          minLength: 1
+          examples:
+            - LED
+        price:
+          $ref: "#/components/schemas/Money"
+        occurred_at:
+          type: string
+          format: date-time
+          examples:
+            - "2026-07-17T10:00:00Z"
+    PriceEvent:
+      type: object
+      required:
+        - event_id
+        - direction_from
+        - direction_to
+        - price
+        - occurred_at
+      properties:
+        event_id:
+          type: string
+          examples:
+            - e2e-1
+        direction_from:
+          type: string
+          examples:
+            - MOW
+        direction_to:
+          type: string
+          examples:
+            - LED
+        price:
+          $ref: "#/components/schemas/Money"
+        occurred_at:
+          type: string
+          format: date-time
+          examples:
+            - "2026-07-17T10:00:00Z"
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          examples:
+            - invalid subscription
